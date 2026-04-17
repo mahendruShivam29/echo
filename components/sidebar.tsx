@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Library, Music2, PlusCircle, Sparkles } from "lucide-react";
+import { AuthButton } from "@/components/auth/auth-button";
 
 const navItems = [
   { href: "/", label: "Feed", icon: Music2 },
@@ -28,6 +29,9 @@ export function Sidebar() {
           </Link>
         ))}
       </nav>
+      <div className="absolute bottom-6 left-5 right-5">
+        <AuthButton />
+      </div>
     </aside>
   );
 }
