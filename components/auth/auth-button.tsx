@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { LogIn, LogOut } from "lucide-react";
 import type { User } from "@supabase/supabase-js";
@@ -9,7 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 
 export function AuthButton() {
   const [user, setUser] = useState<User | null>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
