@@ -44,7 +44,7 @@ export function BottomPlayer() {
       url: currentTrack.audio_url
     });
 
-    waveSurfer.setVolume(volume);
+    waveSurfer.setVolume(usePlayerStore.getState().volume);
     waveSurfer.on("ready", () => {
       setIsBuffering(false);
       if (usePlayerStore.getState().isPlaying) {
