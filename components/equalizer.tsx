@@ -8,7 +8,7 @@ export function Equalizer() {
       {[0, 1, 2].map((bar) => (
         <motion.span
           key={bar}
-          className="w-1 rounded-full bg-emerald-300"
+          className="w-1 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.65)]"
           animate={{ height: [4, 14, 7, 12, 4] }}
           transition={{
             duration: 1.1,

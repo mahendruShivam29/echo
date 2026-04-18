@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { TrackGrid } from "@/components/track-grid";
+import { PageHeading } from "@/components/page-heading";
 import { createClient } from "@/lib/supabase/server";
 import type { Track } from "@/lib/types";
 
@@ -22,15 +23,12 @@ export default async function LibraryPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <section className="mx-auto max-w-7xl space-y-8">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
-          Library
-        </p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">
-          Your finished and in-flight tracks.
-        </h1>
-      </div>
+    <section className="mx-auto max-w-7xl space-y-10">
+      <PageHeading
+        eyebrow="Library"
+        title="Your finished and in-flight tracks."
+        description="Every generation stays here, from the first processing state to the final mastered waveform."
+      />
       <TrackGrid tracks={(data ?? []) as Track[]} emptyText="Create your first instrumental." />
     </section>
   );

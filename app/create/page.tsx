@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { CreateForm } from "@/components/create/create-form";
+import { PageHeading } from "@/components/page-heading";
 import { createClient } from "@/lib/supabase/server";
 import type { Track } from "@/lib/types";
 
@@ -23,15 +24,12 @@ export default async function CreatePage() {
     .limit(12);
 
   return (
-    <section className="mx-auto max-w-5xl space-y-8">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-[0.22em] text-emerald-300">
-          Create
-        </p>
-        <h1 className="mt-3 text-4xl font-black tracking-tight text-white sm:text-6xl">
-          Shape a new instrumental from a single prompt.
-        </h1>
-      </div>
+    <section className="mx-auto max-w-6xl space-y-10">
+      <PageHeading
+        eyebrow="Create"
+        title="Shape a new instrumental from a single prompt."
+        description="Describe mood, instruments, tempo, space, and texture. Echo handles the generation in the background and updates this page live."
+      />
       <CreateForm initialTracks={(data ?? []) as Track[]} />
     </section>
   );

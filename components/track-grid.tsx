@@ -4,7 +4,7 @@ import { TrackCard } from "@/components/track-card";
 export function TrackGrid({ tracks, emptyText }: { tracks: Track[]; emptyText: string }) {
   if (!tracks.length) {
     return (
-      <div className="rounded-md border border-dashed border-white/15 px-6 py-14 text-center text-zinc-400">
+      <div className="rounded-md border border-dashed border-white/15 bg-white/[0.03] px-6 py-16 text-center text-zinc-400 backdrop-blur-xl">
         {emptyText}
       </div>
     );
