@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import Replicate from "replicate";
 import { createClient } from "@/lib/supabase/server";
 import { requireEnv } from "@/lib/env";
+import { GENERATION_DURATION_SECONDS } from "@/lib/generation";
+import { isLocalSiteUrl } from "@/lib/track-completion";
 
 const MUSICGEN_VERSION =
-  "671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e31a5448a0d0f";
+  "671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb";
 
 export async function POST(request: Request) {
   const supabase = createClient();
+  const siteUrl = requireEnv("NEXT_PUBLIC_SITE_URL");
+  const isLocalCompletion = isLocalSiteUrl(siteUrl);
   const {
     data: { user },
     error: userError
@@ -38,7 +42,11 @@ export async function POST(request: Request) {
     .single();
 
   if (insertError || !track) {
-    return NextResponse.json({ error: "Could not create track." }, { status: 500 });
+    console.error("Track insert failed", insertError);
+    return NextResponse.json(
+      { error: insertError?.message ?? "Could not create track." },
+      { status: 500 }
+    );
   }
 
   const replicate = new Replicate({
@@ -50,11 +58,15 @@ export async function POST(request: Request) {
       version: MUSICGEN_VERSION,
       input: {
         prompt: normalizedPrompt,
-        duration: 60,
+        duration: GENERATION_DURATION_SECONDS,
         model_version: "stereo-large"
       },
-      webhook: `${requireEnv("NEXT_PUBLIC_SITE_URL")}/api/webhook?trackId=${track.id}`,
-      webhook_events_filter: ["completed"]
+      ...(isLocalCompletion
+        ? {}
+        : {
+            webhook: `${siteUrl}/api/webhook?trackId=${track.id}`,
+            webhook_events_filter: ["completed"]
+          })
     });
 
     const { error: updateError } = await supabase
@@ -69,7 +81,20 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ trackId: track.id });
+    if (isLocalCompletion) {
+      void fetch(`${siteUrl}/api/dev-complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackId: track.id, predictionId: prediction.id })
+      }).catch((devCompletionError) => {
+        console.error("Local completion worker failed to start", devCompletionError);
+      });
+    }
+
+    return NextResponse.json({
+      trackId: track.id,
+      completion: isLocalCompletion ? "local-dev-worker" : "webhook"
+    });
   } catch (error) {
     await supabase.from("tracks").update({ status: "failed" }).eq("id", track.id);
     return NextResponse.json(

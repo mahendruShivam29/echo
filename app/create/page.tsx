@@ -30,7 +30,7 @@ export default async function CreatePage() {
         title="Shape a new instrumental from a single prompt."
         description="Describe mood, instruments, tempo, space, and texture. Echo handles the generation in the background and updates this page live."
       />
-      <CreateForm initialTracks={(data ?? []) as Track[]} />
+      <CreateForm initialTracks={(data ?? []) as Track[]} userId={user.id} />
     </section>
   );
 }

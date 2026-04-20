@@ -1,0 +1,1 @@
+export const GENERATION_DURATION_SECONDS = 15;

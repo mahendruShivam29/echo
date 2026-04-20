@@ -21,6 +21,10 @@ interface PlayerState {
   clearQueue: () => void;
 }
 
+function getPlayableTracks(queue: Track[]) {
+  return queue.filter((track) => track.status === "succeeded" && Boolean(track.audio_url));
+}
+
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   currentTrack: null,
   queue: [],
@@ -29,7 +33,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   volume: 0.8,
   isBuffering: false,
   playTrack: (track, queue) => {
-    const nextQueue = queue?.length ? queue : [track];
+    if (track.status !== "succeeded" || !track.audio_url) {
+      return;
+    }
+
+    const nextQueue = getPlayableTracks(queue?.length ? queue : [track]);
     const nextIndex = Math.max(
       0,
       nextQueue.findIndex((queuedTrack) => queuedTrack.id === track.id)
@@ -44,36 +52,55 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
   pauseTrack: () => set({ isPlaying: false }),
   resumeTrack: () => {
-    if (get().currentTrack) {
+    const { currentTrack } = get();
+    if (currentTrack?.audio_url && currentTrack.status === "succeeded") {
       set({ isPlaying: true });
     }
   },
   playNext: () => {
     const { queue, currentIndex } = get();
-    if (!queue.length) {
+    const playableQueue = getPlayableTracks(queue);
+
+    if (!playableQueue.length) {
       return;
     }
 
-    const nextIndex = (currentIndex + 1) % queue.length;
-    set({ currentIndex: nextIndex, currentTrack: queue[nextIndex], isPlaying: true });
+    const nextIndex = (Math.max(0, currentIndex) + 1) % playableQueue.length;
+    set({
+      queue: playableQueue,
+      currentIndex: nextIndex,
+      currentTrack: playableQueue[nextIndex],
+      isPlaying: true
+    });
   },
   playPrevious: () => {
     const { queue, currentIndex } = get();
-    if (!queue.length) {
+    const playableQueue = getPlayableTracks(queue);
+
+    if (!playableQueue.length) {
       return;
     }
 
-    const nextIndex = currentIndex <= 0 ? queue.length - 1 : currentIndex - 1;
-    set({ currentIndex: nextIndex, currentTrack: queue[nextIndex], isPlaying: true });
+    const nextIndex = currentIndex <= 0 ? playableQueue.length - 1 : currentIndex - 1;
+    set({
+      queue: playableQueue,
+      currentIndex: nextIndex,
+      currentTrack: playableQueue[nextIndex],
+      isPlaying: true
+    });
   },
   setVolume: (volume) => set({ volume }),
   setIsBuffering: (value) => set({ isBuffering: value }),
-  setQueue: (queue, startIndex = 0) =>
+  setQueue: (queue, startIndex = 0) => {
+    const playableQueue = getPlayableTracks(queue);
+    const safeIndex = playableQueue.length ? Math.min(startIndex, playableQueue.length - 1) : -1;
+
     set({
-      queue,
-      currentIndex: queue.length ? startIndex : -1,
-      currentTrack: queue[startIndex] ?? null
-    }),
+      queue: playableQueue,
+      currentIndex: safeIndex,
+      currentTrack: safeIndex >= 0 ? playableQueue[safeIndex] : null
+    });
+  },
   clearQueue: () =>
     set({
       currentTrack: null,

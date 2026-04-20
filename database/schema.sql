@@ -22,7 +22,8 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tracks ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Users can view all tracks" ON tracks;
-CREATE POLICY "Users can view all tracks" ON tracks FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can view own tracks" ON tracks;
+CREATE POLICY "Users can view own tracks" ON tracks FOR SELECT USING (auth.uid() = user_id);
 
 DROP POLICY IF EXISTS "Users can insert own tracks" ON tracks;
 CREATE POLICY "Users can insert own tracks" ON tracks FOR INSERT WITH CHECK (auth.uid() = user_id);
@@ -30,20 +31,16 @@ CREATE POLICY "Users can insert own tracks" ON tracks FOR INSERT WITH CHECK (aut
 DROP POLICY IF EXISTS "Users can update own tracks" ON tracks;
 CREATE POLICY "Users can update own tracks" ON tracks FOR UPDATE USING (auth.uid() = user_id);
 
-INSERT INTO storage.buckets (id, name, public, cors_rules)
+DROP POLICY IF EXISTS "Users can delete own tracks" ON tracks;
+CREATE POLICY "Users can delete own tracks" ON tracks FOR DELETE USING (auth.uid() = user_id);
+
+INSERT INTO storage.buckets (id, name, public)
 VALUES (
     'tracks',
     'tracks',
-    true,
-    '[{
-        "allowedOrigins":["*"],
-        "allowedMethods":["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
-        "allowedHeaders":["*"],
-        "exposeHeaders":["*"],
-        "maxAgeSeconds": 3600
-    }]'::jsonb
+    true
 )
-ON CONFLICT (id) DO UPDATE SET cors_rules = EXCLUDED.cors_rules;
+ON CONFLICT (id) DO UPDATE SET public = EXCLUDED.public;
 
 DROP POLICY IF EXISTS "Public Access" ON storage.objects;
 CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING (bucket_id = 'tracks');

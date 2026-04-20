@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { TrackGrid } from "@/components/track-grid";
+import { LiveTrackGrid } from "@/components/live-track-grid";
 import { PageHeading } from "@/components/page-heading";
 import { createClient } from "@/lib/supabase/server";
 import type { Track } from "@/lib/types";
@@ -29,7 +29,11 @@ export default async function LibraryPage() {
         title="Your finished and in-flight tracks."
         description="Every generation stays here, from the first processing state to the final mastered waveform."
       />
-      <TrackGrid tracks={(data ?? []) as Track[]} emptyText="Create your first instrumental." />
+      <LiveTrackGrid
+        initialTracks={(data ?? []) as Track[]}
+        userId={user.id}
+        emptyText="Create your first instrumental."
+      />
     </section>
   );
 }

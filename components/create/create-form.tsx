@@ -2,10 +2,11 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AudioWaveform, Sparkles, Timer, Wand2 } from "lucide-react";
+import { AudioWaveform, CheckCircle2, Loader2, Sparkles, Timer, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { TrackGrid } from "@/components/track-grid";
+import { GENERATION_DURATION_SECONDS } from "@/lib/generation";
 import { createClient } from "@/lib/supabase/client";
 import type { Track } from "@/lib/types";
 
@@ -20,37 +21,40 @@ const promptSeeds = [
   "Fast afro-house instrumental with hand percussion, bright plucks, and a deep rolling groove."
 ];
 
-export function CreateForm({ initialTracks }: { initialTracks: Track[] }) {
+function mergeTrack(current: Track[], nextTrack: Track) {
+  const exists = current.some((track) => track.id === nextTrack.id);
+  const nextTracks = exists
+    ? current.map((track) => (track.id === nextTrack.id ? nextTrack : track))
+    : [nextTrack, ...current];
+
+  return nextTracks.sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+}
+
+export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; userId: string }) {
   const [prompt, setPrompt] = useState("");
   const [tracks, setTracks] = useState(initialTracks);
-  const [pendingTrackId, setPendingTrackId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const supabase = useMemo(() => createClient(), []);
+  const processingCount = tracks.filter((track) => track.status === "processing").length;
+  const finishedCount = tracks.filter((track) => track.status === "succeeded").length;
 
   useEffect(() => {
-    if (!pendingTrackId) {
-      return;
-    }
-
     const channel = supabase
-      .channel("track-updates")
+      .channel(`track-updates-${userId}`)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
           table: "tracks",
-          filter: "id=eq." + pendingTrackId
+          filter: "user_id=eq." + userId
         },
         (payload) => {
           const updatedTrack = payload.new as Track;
-          setTracks((current) =>
-            current.map((track) => (track.id === updatedTrack.id ? updatedTrack : track))
-          );
-          if (updatedTrack.status !== "processing") {
-            setPendingTrackId(null);
-          }
+          setTracks((current) => mergeTrack(current, updatedTrack));
         }
       )
       .subscribe();
@@ -58,7 +62,44 @@ export function CreateForm({ initialTracks }: { initialTracks: Track[] }) {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [pendingTrackId, supabase]);
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    const processingTrackIds = tracks
+      .filter((track) => track.status === "processing")
+      .map((track) => track.id);
+
+    if (!processingTrackIds.length) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function syncProcessingTracks() {
+      const { data, error: syncError } = await supabase
+        .from("tracks")
+        .select("*")
+        .in("id", processingTrackIds);
+
+      if (cancelled || syncError || !data) {
+        return;
+      }
+
+      setTracks((current) =>
+        (data as Track[]).reduce((nextTracks, nextTrack) => mergeTrack(nextTracks, nextTrack), current)
+      );
+    }
+
+    void syncProcessingTracks();
+    const interval = window.setInterval(() => {
+      void syncProcessingTracks();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [supabase, tracks, userId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -81,17 +122,16 @@ export function CreateForm({ initialTracks }: { initialTracks: Track[] }) {
 
     const optimisticTrack: Track = {
       id: data.trackId,
-      user_id: "current-user",
+      user_id: userId,
       prompt,
       audio_url: null,
       status: "processing",
       replicate_job_id: null,
-      duration_seconds: 60,
+      duration_seconds: GENERATION_DURATION_SECONDS,
       created_at: new Date().toISOString()
     };
 
     setTracks((current) => [optimisticTrack, ...current]);
-    setPendingTrackId(data.trackId);
     setPrompt("");
   }
 
@@ -167,7 +207,7 @@ export function CreateForm({ initialTracks }: { initialTracks: Track[] }) {
                 transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
                 className="text-sm text-zinc-400"
               >
-                Instrumentals render in about a minute.
+                Instrumentals render in the background.
               </motion.p>
             )}
           </AnimatePresence>
@@ -183,29 +223,54 @@ export function CreateForm({ initialTracks }: { initialTracks: Track[] }) {
         <div className="rounded-md bg-white/5 p-5 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-md bg-white/10 text-emerald-300">
-              <Timer className="h-5 w-5" />
+              {processingCount ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Timer className="h-5 w-5" />
+              )}
             </span>
             <div>
-              <p className="font-bold text-white">60-second wait state</p>
-              <p className="text-sm text-zinc-400">Processing cards update live through Supabase Realtime.</p>
+              <p className="font-bold text-white">
+                {processingCount
+                  ? `${processingCount} rendering now`
+                  : `${GENERATION_DURATION_SECONDS}-second wait state`}
+              </p>
+              <p className="text-sm text-zinc-400">
+                Processing cards update live and fall back to status sync.
+              </p>
             </div>
           </div>
         </div>
         <div className="rounded-md bg-white/5 p-5 shadow-2xl ring-1 ring-white/10 backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-md bg-white/10 text-sky-300">
-              <AudioWaveform className="h-5 w-5" />
+              {finishedCount ? (
+                <CheckCircle2 className="h-5 w-5 text-emerald-300" />
+              ) : (
+                <AudioWaveform className="h-5 w-5" />
+              )}
             </span>
             <div>
-              <p className="font-bold text-white">Persistent playback</p>
-              <p className="text-sm text-zinc-400">The player stays mounted across Feed, Create, and Library.</p>
+              <p className="font-bold text-white">
+                {finishedCount ? `${finishedCount} ready to play` : "Persistent playback"}
+              </p>
+              <p className="text-sm text-zinc-400">
+                The player stays mounted across Feed, Create, and Library.
+              </p>
             </div>
           </div>
         </div>
       </aside>
 
       <div className="lg:col-span-2">
-        <TrackGrid tracks={tracks} emptyText="Your generated tracks will appear here." />
+        <TrackGrid
+          tracks={tracks}
+          emptyText="Your generated tracks will appear here."
+          currentUserId={userId}
+          onTrackDeleted={(trackId) =>
+            setTracks((current) => current.filter((track) => track.id !== trackId))
+          }
+        />
       </div>
     </div>
   );
