@@ -10,10 +10,12 @@ import { GENERATION_DURATION_SECONDS } from "@/lib/generation";
 import { generationModelLabel, type GenerationModel } from "@/lib/models";
 import { createClient } from "@/lib/supabase/client";
 import type { Track } from "@/lib/types";
+import type { TrackCover } from "@/lib/unsplash";
 
 type GenerateResponse = {
   trackId?: string;
   model?: GenerationModel;
+  cover?: TrackCover | null;
   error?: string;
 };
 
@@ -130,6 +132,11 @@ export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; 
       user_id: userId,
       prompt,
       generation_model: data.model ?? selectedModel,
+      cover_image_url: data.cover?.cover_image_url ?? null,
+      cover_image_alt: data.cover?.cover_image_alt ?? null,
+      cover_photographer_name: data.cover?.cover_photographer_name ?? null,
+      cover_photographer_url: data.cover?.cover_photographer_url ?? null,
+      cover_unsplash_url: data.cover?.cover_unsplash_url ?? null,
       audio_url: null,
       status: "processing",
       replicate_job_id: null,

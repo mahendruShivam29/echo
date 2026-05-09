@@ -5,6 +5,8 @@ import { requireEnv } from "@/lib/env";
 import { GENERATION_DURATION_SECONDS } from "@/lib/generation";
 import { isLocalSiteUrl } from "@/lib/track-completion";
 import { isGenerationModel, type GenerationModel } from "@/lib/models";
+import type { TrackCover } from "@/lib/unsplash";
+import { searchTrackCover } from "@/lib/unsplash";
 
 const ACE_STEP_VERSION =
   "1319559eccfff10b424a0954901362baa42197892bd3d2e554440b68817a741c";
@@ -18,9 +20,20 @@ type PostgrestLikeError = {
   hint?: string | null;
 };
 
-function isMissingGenerationModelColumn(error: PostgrestLikeError | null | undefined) {
+const trackInsertColumns = [
+  "generation_model",
+  "cover_image_url",
+  "cover_image_alt",
+  "cover_photographer_name",
+  "cover_photographer_url",
+  "cover_unsplash_url"
+] as const;
+
+type TrackInsertColumn = (typeof trackInsertColumns)[number];
+
+function getMissingInsertColumn(error: PostgrestLikeError | null | undefined): TrackInsertColumn | null {
   if (!error) {
-    return false;
+    return null;
   }
 
   const combinedText = [error.message, error.details, error.hint]
@@ -28,17 +41,17 @@ function isMissingGenerationModelColumn(error: PostgrestLikeError | null | undef
     .join(" ")
     .toLowerCase();
 
-  if (!combinedText.includes("generation_model")) {
-    return false;
+  if (!(error.code === "PGRST204" || error.code === "42703")) {
+    return null;
   }
 
-  return (
-    error.code === "PGRST204" ||
-    error.code === "42703" ||
-    combinedText.includes("schema cache") ||
-    combinedText.includes("column") ||
-    combinedText.includes("does not exist")
-  );
+  for (const column of trackInsertColumns) {
+    if (combinedText.includes(column)) {
+      return column;
+    }
+  }
+
+  return null;
 }
 
 function buildPredictionInput(model: GenerationModel, prompt: string) {
@@ -91,25 +104,52 @@ export async function POST(request: Request) {
     );
   }
 
+  const cover = await searchTrackCover(normalizedPrompt).catch((error) => {
+    console.error("Unsplash cover lookup failed", error);
+    return null;
+  });
+
+  let insertPayload: {
+    user_id: string;
+    prompt: string;
+    generation_model?: GenerationModel;
+    cover_image_url?: string;
+    cover_image_alt?: string | null;
+    cover_photographer_name?: string;
+    cover_photographer_url?: string;
+    cover_unsplash_url?: string;
+    status: "processing";
+  } = {
+    user_id: user.id,
+    prompt: normalizedPrompt,
+    generation_model: selectedModel,
+    status: "processing"
+  };
+
+  if (cover) {
+    insertPayload = {
+      ...insertPayload,
+      ...cover
+    };
+  }
+
   let insertResult = await supabase
     .from("tracks")
-    .insert({
-      user_id: user.id,
-      prompt: normalizedPrompt,
-      generation_model: selectedModel,
-      status: "processing"
-    })
+    .insert(insertPayload)
     .select("id")
     .single();
 
-  if (isMissingGenerationModelColumn(insertResult.error)) {
+  while (true) {
+    const missingColumn = getMissingInsertColumn(insertResult.error);
+
+    if (!missingColumn) {
+      break;
+    }
+
+    delete insertPayload[missingColumn];
     insertResult = await supabase
       .from("tracks")
-      .insert({
-        user_id: user.id,
-        prompt: normalizedPrompt,
-        status: "processing"
-      })
+      .insert(insertPayload)
       .select("id")
       .single();
   }
@@ -166,6 +206,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       trackId: track.id,
       model: selectedModel,
+      cover,
       completion: isLocalCompletion ? "local-dev-worker" : "webhook"
     });
   } catch (error) {

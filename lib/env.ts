@@ -3,7 +3,8 @@ const requiredServerEnv = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
   "SUPABASE_SERVICE_ROLE_KEY",
-  "REPLICATE_API_TOKEN"
+  "REPLICATE_API_TOKEN",
+  "UNSPLASH_ACCESS_KEY"
 ] as const;
 
 export function requireEnv(name: (typeof requiredServerEnv)[number]) {

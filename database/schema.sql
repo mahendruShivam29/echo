@@ -12,6 +12,11 @@ CREATE TABLE IF NOT EXISTS tracks (
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     prompt TEXT NOT NULL,
     generation_model TEXT DEFAULT 'ace-step-base' CHECK (generation_model IN ('ace-step-base', 'musicgen')),
+    cover_image_url TEXT,
+    cover_image_alt TEXT,
+    cover_photographer_name TEXT,
+    cover_photographer_url TEXT,
+    cover_unsplash_url TEXT,
     audio_url TEXT,
     status TEXT DEFAULT 'processing' CHECK (status IN ('processing', 'succeeded', 'failed')),
     replicate_job_id TEXT,
@@ -21,6 +26,21 @@ CREATE TABLE IF NOT EXISTS tracks (
 
 ALTER TABLE tracks
 ADD COLUMN IF NOT EXISTS generation_model TEXT DEFAULT 'ace-step-base';
+
+ALTER TABLE tracks
+ADD COLUMN IF NOT EXISTS cover_image_url TEXT;
+
+ALTER TABLE tracks
+ADD COLUMN IF NOT EXISTS cover_image_alt TEXT;
+
+ALTER TABLE tracks
+ADD COLUMN IF NOT EXISTS cover_photographer_name TEXT;
+
+ALTER TABLE tracks
+ADD COLUMN IF NOT EXISTS cover_photographer_url TEXT;
+
+ALTER TABLE tracks
+ADD COLUMN IF NOT EXISTS cover_unsplash_url TEXT;
 
 ALTER TABLE tracks
 DROP CONSTRAINT IF EXISTS tracks_generation_model_check;

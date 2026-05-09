@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { ListMusic, Pause, Play, SkipBack, SkipForward, Volume2, Waves } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 import { Button } from "@/components/ui/button";
-import { albumArtGradient } from "@/lib/album-art";
+import { getTrackArtworkStyle } from "@/lib/cover-art";
 import { cn } from "@/lib/utils";
 import { usePlayerStore } from "@/stores/player-store";
 
@@ -94,7 +94,11 @@ export function BottomPlayer() {
         <div className="flex min-w-0 items-center gap-3">
           <motion.div
             className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md shadow-2xl"
-            style={albumArtGradient(currentTrack?.id ?? "empty")}
+            style={
+              currentTrack
+                ? getTrackArtworkStyle(currentTrack)
+                : getTrackArtworkStyle({ id: "empty", cover_image_url: null })
+            }
             animate={isPlaying ? { scale: [1, 1.035, 1] } : { scale: 1 }}
             transition={{ duration: 1.4, repeat: isPlaying ? Infinity : 0, ease: [0.32, 0.72, 0, 1] }}
           >
@@ -108,6 +112,30 @@ export function BottomPlayer() {
               <Waves className="h-3.5 w-3.5" />
               {isBuffering ? "Buffering" : currentTrack ? "Project Echo" : "Choose a track"}
             </p>
+            {currentTrack?.cover_photographer_name &&
+            currentTrack.cover_photographer_url &&
+            currentTrack.cover_unsplash_url ? (
+              <p className="truncate text-[11px] text-zinc-500">
+                Photo by{" "}
+                <a
+                  href={currentTrack.cover_photographer_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-zinc-400 transition hover:text-white"
+                >
+                  {currentTrack.cover_photographer_name}
+                </a>{" "}
+                on{" "}
+                <a
+                  href={currentTrack.cover_unsplash_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-zinc-400 transition hover:text-white"
+                >
+                  Unsplash
+                </a>
+              </p>
+            ) : null}
           </div>
         </div>
 

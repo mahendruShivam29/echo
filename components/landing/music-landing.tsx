@@ -14,7 +14,7 @@ import {
   Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { albumArtGradient } from "@/lib/album-art";
+import { getTrackArtworkStyle } from "@/lib/cover-art";
 import { generationModelLabel } from "@/lib/models";
 import type { Track } from "@/lib/types";
 import { usePlayerStore } from "@/stores/player-store";
@@ -81,6 +81,23 @@ function getTrackModel(track: Track | (typeof fallbackShowcaseTracks)[number]) {
   }
 
   return "Project Echo Showcase";
+}
+
+function getTrackAttribution(track: Track | (typeof fallbackShowcaseTracks)[number]) {
+  if (
+    "cover_photographer_name" in track &&
+    track.cover_photographer_name &&
+    track.cover_photographer_url &&
+    track.cover_unsplash_url
+  ) {
+    return {
+      photographerName: track.cover_photographer_name,
+      photographerUrl: track.cover_photographer_url,
+      unsplashUrl: track.cover_unsplash_url
+    };
+  }
+
+  return null;
 }
 
 export function MusicLanding({ initialTracks }: { initialTracks: Track[] }) {
@@ -240,6 +257,7 @@ function SpatialCarousel({ tracks }: { tracks: Track[] }) {
                 index={index}
                 activeIndex={activeIndex}
                 trackCount={showcaseTracks.length}
+                track={track}
                 trackId={track.id}
                 prompt={track.prompt}
                 onClick={() => goToIndex(index)}
@@ -328,6 +346,28 @@ function SpatialCarousel({ tracks }: { tracks: Track[] }) {
             />
           </div>
         </div>
+        {getTrackAttribution(activeTrack) ? (
+          <p className="mt-4 text-xs text-zinc-500">
+            Photo by{" "}
+            <a
+              href={getTrackAttribution(activeTrack)?.photographerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-400 transition hover:text-white"
+            >
+              {getTrackAttribution(activeTrack)?.photographerName}
+            </a>{" "}
+            on{" "}
+            <a
+              href={getTrackAttribution(activeTrack)?.unsplashUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-400 transition hover:text-white"
+            >
+              Unsplash
+            </a>
+          </p>
+        ) : null}
       </motion.div>
       {!playableTracks.length ? (
         <p className="mt-4 text-center text-sm text-zinc-500">
@@ -342,6 +382,7 @@ function CarouselCard({
   index,
   activeIndex,
   trackCount,
+  track,
   trackId,
   prompt,
   onClick
@@ -349,6 +390,7 @@ function CarouselCard({
   index: number;
   activeIndex: number;
   trackCount: number;
+  track: Track | (typeof fallbackShowcaseTracks)[number];
   trackId: string;
   prompt: string;
   onClick: () => void;
@@ -389,7 +431,14 @@ function CarouselCard({
       <div
         aria-hidden="true"
         className="h-full w-full"
-        style={albumArtGradient(trackId)}
+        style={
+          "cover_image_url" in track
+            ? getTrackArtworkStyle({
+                id: trackId,
+                cover_image_url: track.cover_image_url ?? null
+              })
+            : getTrackArtworkStyle({ id: trackId, cover_image_url: null })
+        }
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.24),transparent_34%)] mix-blend-screen" />
       <div className="absolute inset-x-6 top-6 flex items-center justify-between">

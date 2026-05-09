@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ProcessingCard } from "@/components/processing-card";
-import { albumArtGradient } from "@/lib/album-art";
+import { getTrackArtworkStyle } from "@/lib/cover-art";
 import { GENERATION_DURATION_SECONDS } from "@/lib/generation";
 import { generationModelLabel } from "@/lib/models";
 import { cn, formatDuration } from "@/lib/utils";
@@ -114,6 +114,11 @@ export function TrackCard({
       user_id: currentUserId ?? track.user_id,
       prompt: normalizedPrompt,
       generation_model: track.generation_model ?? "ace-step-base",
+      cover_image_url: track.cover_image_url,
+      cover_image_alt: track.cover_image_alt,
+      cover_photographer_name: track.cover_photographer_name,
+      cover_photographer_url: track.cover_photographer_url,
+      cover_unsplash_url: track.cover_unsplash_url,
       audio_url: null,
       status: "processing",
       replicate_job_id: null,
@@ -161,7 +166,8 @@ export function TrackCard({
       />
       <div
         className="relative aspect-square overflow-hidden rounded-md shadow-2xl"
-        style={albumArtGradient(track.id)}
+        style={getTrackArtworkStyle(track)}
+        aria-label={track.cover_image_alt ?? undefined}
       >
         {canDelete ? (
           <DeleteButton
@@ -276,6 +282,28 @@ export function TrackCard({
             <span>{formatDuration(track.duration_seconds)}</span>
           </div>
         </div>
+        {track.cover_photographer_name && track.cover_photographer_url && track.cover_unsplash_url ? (
+          <p className="mt-3 text-[11px] text-zinc-500">
+            Photo by{" "}
+            <a
+              href={track.cover_photographer_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-400 transition hover:text-white"
+            >
+              {track.cover_photographer_name}
+            </a>{" "}
+            on{" "}
+            <a
+              href={track.cover_unsplash_url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-400 transition hover:text-white"
+            >
+              Unsplash
+            </a>
+          </p>
+        ) : null}
       </div>
     </motion.article>
   );
