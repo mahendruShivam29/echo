@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, type PanInfo } from "framer-motion";
 import {
@@ -187,10 +187,28 @@ function SpatialCarousel({ tracks }: { tracks: Track[] }) {
     [tracks]
   );
   const showcaseTracks = playableTracks.length ? playableTracks : fallbackShowcaseTracks;
-  const activeTrack = showcaseTracks[activeIndex];
-  const activePlayableTrack = playableTracks[activeIndex] ?? null;
+  const currentPlayableIndex = playableTracks.findIndex((track) => track.id === currentTrack?.id);
+  const resolvedActiveIndex =
+    currentPlayableIndex >= 0
+      ? currentPlayableIndex
+      : Math.min(activeIndex, Math.max(0, showcaseTracks.length - 1));
+  const activeTrack = showcaseTracks[resolvedActiveIndex];
+  const activePlayableTrack = playableTracks[resolvedActiveIndex] ?? null;
   const storeTrackActive = activePlayableTrack ? currentTrack?.id === activePlayableTrack.id : false;
   const playing = storeTrackActive ? isPlaying : localPlaying;
+
+  useEffect(() => {
+    if (currentPlayableIndex >= 0 && currentPlayableIndex !== activeIndex) {
+      setActiveIndex(currentPlayableIndex);
+      setLocalPlaying(false);
+    }
+  }, [activeIndex, currentPlayableIndex]);
+
+  useEffect(() => {
+    if (activeIndex > showcaseTracks.length - 1) {
+      setActiveIndex(Math.max(0, showcaseTracks.length - 1));
+    }
+  }, [activeIndex, showcaseTracks.length]);
 
   function goToIndex(nextIndex: number) {
     const normalizedIndex = (nextIndex + showcaseTracks.length) % showcaseTracks.length;
@@ -208,12 +226,12 @@ function SpatialCarousel({ tracks }: { tracks: Track[] }) {
     const intent = info.offset.x + info.velocity.x * 0.18;
 
     if (intent < -90) {
-      goToIndex(activeIndex + (Math.abs(info.velocity.x) > 900 ? 2 : 1));
+      goToIndex(resolvedActiveIndex + (Math.abs(info.velocity.x) > 900 ? 2 : 1));
       return;
     }
 
     if (intent > 90) {
-      goToIndex(activeIndex - (Math.abs(info.velocity.x) > 900 ? 2 : 1));
+      goToIndex(resolvedActiveIndex - (Math.abs(info.velocity.x) > 900 ? 2 : 1));
     }
   }
 
@@ -255,7 +273,7 @@ function SpatialCarousel({ tracks }: { tracks: Track[] }) {
               <CarouselCard
                 key={track.id}
                 index={index}
-                activeIndex={activeIndex}
+                activeIndex={resolvedActiveIndex}
                 trackCount={showcaseTracks.length}
                 track={track}
                 trackId={track.id}
@@ -271,7 +289,7 @@ function SpatialCarousel({ tracks }: { tracks: Track[] }) {
         <button
           type="button"
           aria-label="Previous track"
-          onClick={() => goToIndex(activeIndex - 1)}
+          onClick={() => goToIndex(resolvedActiveIndex - 1)}
           className="text-zinc-500 transition hover:text-white"
         >
           <SkipBack className="h-6 w-6" />
@@ -288,7 +306,7 @@ function SpatialCarousel({ tracks }: { tracks: Track[] }) {
         <button
           type="button"
           aria-label="Next track"
-          onClick={() => goToIndex(activeIndex + 1)}
+          onClick={() => goToIndex(resolvedActiveIndex + 1)}
           className="text-zinc-500 transition hover:text-white"
         >
           <SkipForward className="h-6 w-6" />
