@@ -36,7 +36,9 @@ export function AuthButton() {
       variant="ghost"
       className="w-full"
       onClick={() => {
-        void supabase.auth.signOut();
+        void supabase.auth.signOut().then(() => {
+          window.location.assign("/");
+        });
       }}
     >
       <LogOut className="h-4 w-4" />

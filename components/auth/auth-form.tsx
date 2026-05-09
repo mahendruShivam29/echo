@@ -3,7 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Lock, Mail, Sparkles } from "lucide-react";
+import { Loader2, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
@@ -144,7 +144,7 @@ export function AuthForm() {
           className="w-full"
           disabled={isSubmitting || !email.trim() || password.length < 6}
         >
-          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+          {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
           {isSubmitting ? "Connecting..." : mode === "signin" ? "Sign in" : "Create account"}
         </Button>
       </form>

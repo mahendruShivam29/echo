@@ -11,12 +11,23 @@ CREATE TABLE IF NOT EXISTS tracks (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     prompt TEXT NOT NULL,
+    generation_model TEXT DEFAULT 'ace-step-base' CHECK (generation_model IN ('ace-step-base', 'musicgen')),
     audio_url TEXT,
     status TEXT DEFAULT 'processing' CHECK (status IN ('processing', 'succeeded', 'failed')),
     replicate_job_id TEXT,
     duration_seconds INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE tracks
+ADD COLUMN IF NOT EXISTS generation_model TEXT DEFAULT 'ace-step-base';
+
+ALTER TABLE tracks
+DROP CONSTRAINT IF EXISTS tracks_generation_model_check;
+
+ALTER TABLE tracks
+ADD CONSTRAINT tracks_generation_model_check
+CHECK (generation_model IN ('ace-step-base', 'musicgen'));
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tracks ENABLE ROW LEVEL SECURITY;

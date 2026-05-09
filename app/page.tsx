@@ -1,6 +1,7 @@
-import { redirect } from "next/navigation";
+import { MusicLanding } from "@/components/landing/music-landing";
 import { LivePublicFeed } from "@/components/live-public-feed";
 import { PageHeading } from "@/components/page-heading";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Track } from "@/lib/types";
 
@@ -13,7 +14,16 @@ export default async function HomePage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth");
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("tracks")
+      .select("*")
+      .eq("status", "succeeded")
+      .not("audio_url", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(9);
+
+    return <MusicLanding initialTracks={(data ?? []) as Track[]} />;
   }
 
   const { data } = await supabase

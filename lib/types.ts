@@ -1,3 +1,5 @@
+import type { GenerationModel } from "@/lib/models";
+
 export type TrackStatus = "processing" | "succeeded" | "failed";
 
 export interface Profile {
@@ -10,6 +12,7 @@ export interface Track {
   id: string;
   user_id: string;
   prompt: string;
+  generation_model: GenerationModel | null;
   audio_url: string | null;
   status: TrackStatus;
   replicate_job_id: string | null;

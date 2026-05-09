@@ -2,10 +2,23 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, Loader2, Music2, Pause, Play, Radio, Trash2 } from "lucide-react";
+import {
+  AlertTriangle,
+  Loader2,
+  Music2,
+  Pause,
+  PencilLine,
+  Play,
+  Radio,
+  Trash2,
+  Wand2
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { ProcessingCard } from "@/components/processing-card";
 import { albumArtGradient } from "@/lib/album-art";
+import { GENERATION_DURATION_SECONDS } from "@/lib/generation";
+import { generationModelLabel } from "@/lib/models";
 import { cn, formatDuration } from "@/lib/utils";
 import type { Track } from "@/lib/types";
 import { usePlayerStore } from "@/stores/player-store";
@@ -14,18 +27,25 @@ export function TrackCard({
   track,
   queue,
   currentUserId,
-  onTrackDeleted
+  onTrackDeleted,
+  onTrackRegenerated
 }: {
   track: Track;
   queue: Track[];
   currentUserId?: string;
   onTrackDeleted?: (trackId: string) => void;
+  onTrackRegenerated?: (track: Track) => void;
 }) {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedPrompt, setEditedPrompt] = useState(track.prompt);
+  const [isRegenerating, setIsRegenerating] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const { currentTrack, isPlaying, playTrack, pauseTrack, clearQueue } = usePlayerStore();
   const active = currentTrack?.id === track.id;
   const playable = Boolean(track.audio_url && track.status === "succeeded");
   const canDelete = currentUserId === track.user_id;
+  const canEdit = canDelete && track.status !== "processing";
 
   async function handleDelete() {
     if (!canDelete || isDeleting) {
@@ -56,6 +76,51 @@ export function TrackCard({
     }
 
     onTrackDeleted?.(track.id);
+  }
+
+  async function handleRegenerate() {
+    if (!canEdit || isRegenerating) {
+      return;
+    }
+
+    const normalizedPrompt = editedPrompt.trim();
+    if (normalizedPrompt.length < 8) {
+      setEditError("Prompt must be at least 8 characters.");
+      return;
+    }
+
+    setEditError(null);
+    setIsRegenerating(true);
+
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt: normalizedPrompt,
+        model: track.generation_model ?? "ace-step-base"
+      })
+    });
+    const data = (await response.json().catch(() => null)) as { trackId?: string; error?: string } | null;
+
+    setIsRegenerating(false);
+
+    if (!response.ok || !data?.trackId) {
+      setEditError(data?.error ?? "Could not start a new generation.");
+      return;
+    }
+
+    onTrackRegenerated?.({
+      id: data.trackId,
+      user_id: currentUserId ?? track.user_id,
+      prompt: normalizedPrompt,
+      generation_model: track.generation_model ?? "ace-step-base",
+      audio_url: null,
+      status: "processing",
+      replicate_job_id: null,
+      duration_seconds: GENERATION_DURATION_SECONDS,
+      created_at: new Date().toISOString()
+    });
+    setIsEditing(false);
   }
 
   if (track.status === "processing") {
@@ -143,12 +208,73 @@ export function TrackCard({
         </Button>
       </div>
       <div className="relative mt-4">
-        <p className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-white">{track.prompt}</p>
+        {isEditing ? (
+          <div className="space-y-3">
+            <Textarea
+              value={editedPrompt}
+              onChange={(event) => setEditedPrompt(event.target.value)}
+              maxLength={800}
+              className="min-h-28 text-sm"
+            />
+            {editError ? <p className="text-xs font-medium text-red-300">{editError}</p> : null}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-zinc-500">{editedPrompt.length}/800</span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setEditedPrompt(track.prompt);
+                    setEditError(null);
+                    setIsEditing(false);
+                  }}
+                  disabled={isRegenerating}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleRegenerate}
+                  disabled={isRegenerating || editedPrompt.trim().length < 8}
+                >
+                  {isRegenerating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Wand2 className="h-4 w-4" />
+                  )}
+                  Generate again
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="line-clamp-2 min-h-10 text-sm font-bold leading-5 text-white">{track.prompt}</p>
+        )}
         <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-xs text-zinc-400">
-          <span className={cn(track.status === "failed" && "text-red-300")}>
-            {track.status === "failed" ? "Generation failed" : "Instrumental"}
+          <span className={cn("truncate", track.status === "failed" && "text-red-300")}>
+            {track.status === "failed"
+              ? "Generation failed"
+              : generationModelLabel(track.generation_model)}
           </span>
-          <span>{formatDuration(track.duration_seconds)}</span>
+          <div className="flex items-center gap-2">
+            {canEdit && !isEditing ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditedPrompt(track.prompt);
+                  setEditError(null);
+                  setIsEditing(true);
+                }}
+                className="inline-flex items-center gap-1 font-bold text-emerald-200 transition hover:text-emerald-100"
+              >
+                <PencilLine className="h-3.5 w-3.5" />
+                Edit
+              </button>
+            ) : null}
+            <span>{formatDuration(track.duration_seconds)}</span>
+          </div>
         </div>
       </div>
     </motion.article>

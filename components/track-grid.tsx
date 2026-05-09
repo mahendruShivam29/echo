@@ -5,12 +5,14 @@ export function TrackGrid({
   tracks,
   emptyText,
   currentUserId,
-  onTrackDeleted
+  onTrackDeleted,
+  onTrackRegenerated
 }: {
   tracks: Track[];
   emptyText: string;
   currentUserId?: string;
   onTrackDeleted?: (trackId: string) => void;
+  onTrackRegenerated?: (track: Track) => void;
 }) {
   const playableQueue = tracks.filter(
     (track) => track.status === "succeeded" && Boolean(track.audio_url)
@@ -33,6 +35,7 @@ export function TrackGrid({
           queue={playableQueue}
           currentUserId={currentUserId}
           onTrackDeleted={onTrackDeleted}
+          onTrackRegenerated={onTrackRegenerated}
         />
       ))}
     </div>

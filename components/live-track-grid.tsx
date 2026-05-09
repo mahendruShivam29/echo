@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { TrackGrid } from "@/components/track-grid";
 import { createClient } from "@/lib/supabase/client";
 import type { Track } from "@/lib/types";
@@ -16,6 +16,19 @@ export function LiveTrackGrid({
 }) {
   const [tracks, setTracks] = useState(initialTracks);
   const supabase = useMemo(() => createClient(), []);
+
+  const mergeTrack = useCallback((nextTrack: Track) => {
+    setTracks((current) => {
+      const exists = current.some((track) => track.id === nextTrack.id);
+      const nextTracks = exists
+        ? current.map((track) => (track.id === nextTrack.id ? nextTrack : track))
+        : [nextTrack, ...current];
+
+      return nextTracks.sort(
+        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    });
+  }, []);
 
   useEffect(() => {
     const channel = supabase
@@ -36,16 +49,7 @@ export function LiveTrackGrid({
           }
 
           const nextTrack = payload.new as Track;
-          setTracks((current) => {
-            const exists = current.some((track) => track.id === nextTrack.id);
-            const nextTracks = exists
-              ? current.map((track) => (track.id === nextTrack.id ? nextTrack : track))
-              : [nextTrack, ...current];
-
-            return nextTracks.sort(
-              (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-            );
-          });
+          mergeTrack(nextTrack);
         }
       )
       .subscribe();
@@ -53,7 +57,7 @@ export function LiveTrackGrid({
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [supabase, userId]);
+  }, [mergeTrack, supabase, userId]);
 
   return (
     <TrackGrid
@@ -63,6 +67,7 @@ export function LiveTrackGrid({
       onTrackDeleted={(trackId) =>
         setTracks((current) => current.filter((track) => track.id !== trackId))
       }
+      onTrackRegenerated={mergeTrack}
     />
   );
 }

@@ -4,9 +4,65 @@ import { createClient } from "@/lib/supabase/server";
 import { requireEnv } from "@/lib/env";
 import { GENERATION_DURATION_SECONDS } from "@/lib/generation";
 import { isLocalSiteUrl } from "@/lib/track-completion";
+import { isGenerationModel, type GenerationModel } from "@/lib/models";
 
+const ACE_STEP_VERSION =
+  "1319559eccfff10b424a0954901362baa42197892bd3d2e554440b68817a741c";
 const MUSICGEN_VERSION =
   "671ac645ce5e552cc63a54a2bbff63fcf798043055d2dac5fc9e36a837eedcfb";
+
+type PostgrestLikeError = {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+};
+
+function isMissingGenerationModelColumn(error: PostgrestLikeError | null | undefined) {
+  if (!error) {
+    return false;
+  }
+
+  const combinedText = [error.message, error.details, error.hint]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  if (!combinedText.includes("generation_model")) {
+    return false;
+  }
+
+  return (
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    combinedText.includes("schema cache") ||
+    combinedText.includes("column") ||
+    combinedText.includes("does not exist")
+  );
+}
+
+function buildPredictionInput(model: GenerationModel, prompt: string) {
+  if (model === "musicgen") {
+    return {
+      version: MUSICGEN_VERSION,
+      input: {
+        prompt,
+        duration: GENERATION_DURATION_SECONDS,
+        model_version: "stereo-large"
+      }
+    };
+  }
+
+  return {
+    version: ACE_STEP_VERSION,
+    input: {
+      prompt,
+      duration: GENERATION_DURATION_SECONDS,
+      lyrics: "[Instrumental]",
+      audio_format: "wav"
+    }
+  };
+}
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -21,8 +77,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { prompt } = (await request.json()) as { prompt?: string };
+  const { prompt, model } = (await request.json()) as { prompt?: string; model?: string };
   const normalizedPrompt = prompt?.trim();
+  const requestedModel = model ?? "";
+  const selectedModel: GenerationModel = isGenerationModel(requestedModel)
+    ? requestedModel
+    : "ace-step-base";
 
   if (!normalizedPrompt || normalizedPrompt.length < 8) {
     return NextResponse.json(
@@ -31,15 +91,30 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: track, error: insertError } = await supabase
+  let insertResult = await supabase
     .from("tracks")
     .insert({
       user_id: user.id,
       prompt: normalizedPrompt,
+      generation_model: selectedModel,
       status: "processing"
     })
     .select("id")
     .single();
+
+  if (isMissingGenerationModelColumn(insertResult.error)) {
+    insertResult = await supabase
+      .from("tracks")
+      .insert({
+        user_id: user.id,
+        prompt: normalizedPrompt,
+        status: "processing"
+      })
+      .select("id")
+      .single();
+  }
+
+  const { data: track, error: insertError } = insertResult;
 
   if (insertError || !track) {
     console.error("Track insert failed", insertError);
@@ -54,13 +129,10 @@ export async function POST(request: Request) {
   });
 
   try {
+    const predictionConfig = buildPredictionInput(selectedModel, normalizedPrompt);
     const prediction = await replicate.predictions.create({
-      version: MUSICGEN_VERSION,
-      input: {
-        prompt: normalizedPrompt,
-        duration: GENERATION_DURATION_SECONDS,
-        model_version: "stereo-large"
-      },
+      version: predictionConfig.version,
+      input: predictionConfig.input,
       ...(isLocalCompletion
         ? {}
         : {
@@ -93,6 +165,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       trackId: track.id,
+      model: selectedModel,
       completion: isLocalCompletion ? "local-dev-worker" : "webhook"
     });
   } catch (error) {

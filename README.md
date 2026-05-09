@@ -1,6 +1,6 @@
 # Project Echo
 
-Premium AI instrumental music generation app built with Next.js 14, Supabase, Replicate MusicGen, Zustand, Framer Motion, and Wavesurfer.
+Premium AI music generation app built with Next.js 14, Supabase, Replicate ACE-Step 1.5 + MusicGen, Zustand, Framer Motion, and Wavesurfer.
 
 ## Setup
 

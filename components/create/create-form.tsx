@@ -2,18 +2,22 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { AudioWaveform, CheckCircle2, Loader2, Sparkles, Timer, Wand2 } from "lucide-react";
+import { AudioWaveform, CheckCircle2, Loader2, Timer, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { TrackGrid } from "@/components/track-grid";
 import { GENERATION_DURATION_SECONDS } from "@/lib/generation";
+import { generationModelLabel, type GenerationModel } from "@/lib/models";
 import { createClient } from "@/lib/supabase/client";
 import type { Track } from "@/lib/types";
 
 type GenerateResponse = {
   trackId?: string;
+  model?: GenerationModel;
   error?: string;
 };
+
+const modelOptions: GenerationModel[] = ["ace-step-base", "musicgen"];
 
 const promptSeeds = [
   "Cinematic synthwave with analog bass, glassy arpeggios, and a wide neon chorus.",
@@ -34,6 +38,7 @@ function mergeTrack(current: Track[], nextTrack: Track) {
 
 export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; userId: string }) {
   const [prompt, setPrompt] = useState("");
+  const [selectedModel, setSelectedModel] = useState<GenerationModel>("ace-step-base");
   const [tracks, setTracks] = useState(initialTracks);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -109,7 +114,7 @@ export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; 
     const response = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt })
+      body: JSON.stringify({ prompt, model: selectedModel })
     });
     const data = (await response.json()) as GenerateResponse;
 
@@ -124,6 +129,7 @@ export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; 
       id: data.trackId,
       user_id: userId,
       prompt,
+      generation_model: data.model ?? selectedModel,
       audio_url: null,
       status: "processing",
       replicate_job_id: null,
@@ -159,8 +165,33 @@ export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; 
             <p className="mt-1 text-sm text-zinc-400">The webhook will keep rendering after you leave.</p>
           </div>
           <div className="hidden rounded-md bg-emerald-300/10 px-3 py-2 text-xs font-bold uppercase tracking-[0.16em] text-emerald-200 ring-1 ring-emerald-300/20 sm:block">
-            MusicGen
+            {generationModelLabel(selectedModel)}
           </div>
+        </div>
+        <div className="mb-5 grid gap-2 sm:grid-cols-2">
+          {modelOptions.map((modelOption) => {
+            const active = modelOption === selectedModel;
+
+            return (
+              <button
+                key={modelOption}
+                type="button"
+                onClick={() => setSelectedModel(modelOption)}
+                className={`rounded-md border px-4 py-3 text-left transition ${
+                  active
+                    ? "border-emerald-300/50 bg-emerald-300/10 text-white"
+                    : "border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08] hover:text-white"
+                }`}
+              >
+                <p className="text-sm font-bold">{generationModelLabel(modelOption)}</p>
+                <p className="mt-1 text-xs text-zinc-400">
+                  {modelOption === "ace-step-base"
+                    ? "Lyrics-capable ACE-Step base model via Replicate."
+                    : "Meta MusicGen for text-to-music generation."}
+                </p>
+              </button>
+            );
+          })}
         </div>
         <label htmlFor="prompt" className="text-sm font-semibold text-white">
           Describe the instrumental track
@@ -213,7 +244,6 @@ export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; 
           </AnimatePresence>
           <span className="text-xs text-zinc-500 sm:ml-auto">{prompt.length}/800</span>
           <Button type="submit" disabled={isSubmitting || prompt.trim().length < 8}>
-            <Sparkles className="h-4 w-4" />
             {isSubmitting ? "Starting..." : "Generate"}
           </Button>
         </div>
@@ -270,6 +300,7 @@ export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; 
           onTrackDeleted={(trackId) =>
             setTracks((current) => current.filter((track) => track.id !== trackId))
           }
+          onTrackRegenerated={(track) => setTracks((current) => mergeTrack(current, track))}
         />
       </div>
     </div>

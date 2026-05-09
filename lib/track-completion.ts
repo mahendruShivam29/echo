@@ -37,12 +37,88 @@ function isHttpUrl(value: string) {
   }
 }
 
+function getExtensionFromContentType(contentType: string | null) {
+  if (!contentType) {
+    return null;
+  }
+
+  const normalized = contentType.split(";")[0]?.trim().toLowerCase();
+
+  switch (normalized) {
+    case "audio/wav":
+    case "audio/x-wav":
+      return "wav";
+    case "audio/flac":
+    case "audio/x-flac":
+      return "flac";
+    case "audio/mpeg":
+      return "mp3";
+    case "audio/mp4":
+    case "audio/aac":
+      return "aac";
+    case "audio/ogg":
+    case "audio/opus":
+      return "opus";
+    default:
+      return null;
+  }
+}
+
+function getExtensionFromUrl(value: string) {
+  try {
+    const pathname = new URL(value).pathname;
+    const match = pathname.match(/\.([a-z0-9]+)$/i);
+    return match?.[1]?.toLowerCase() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function resolveUploadedAudioMetadata(audioUrl: string, contentType: string | null) {
+  const extension =
+    getExtensionFromContentType(contentType) ?? getExtensionFromUrl(audioUrl) ?? "wav";
+  const normalizedContentType = contentType?.split(";")[0]?.trim() || `audio/${extension}`;
+
+  return {
+    extension,
+    contentType: normalizedContentType
+  };
+}
+
 async function markTrackFailed(trackId: string): Promise<CompletionResult> {
   const supabase = createAdminClient();
   const { error } = await supabase.from("tracks").update({ status: "failed" }).eq("id", trackId);
 
   if (error) {
     return { ok: false, status: 500, error: "Could not update failed track." };
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+export async function createTrackCompletionTimeoutResult(trackId: string): Promise<CompletionResult> {
+  return markTrackFailed(trackId);
+}
+
+async function markTrackSucceeded(
+  trackId: string,
+  payloadId: string,
+  audioUrl: string
+): Promise<CompletionResult> {
+  const supabase = createAdminClient();
+  const { error: updateError } = await supabase
+    .from("tracks")
+    .update({
+      status: "succeeded",
+      audio_url: audioUrl,
+      replicate_job_id: payloadId,
+      duration_seconds: GENERATION_DURATION_SECONDS
+    })
+    .eq("id", trackId);
+
+  if (updateError) {
+    return { ok: false, status: 500, error: "Could not save completed track." };
   }
 
   revalidatePath("/", "layout");
@@ -99,42 +175,37 @@ export async function completeTrackFromPrediction(
   }
 
   const audioBuffer = await audioResponse.arrayBuffer();
-  const filePath = `${trackId}.wav`;
+  const { extension, contentType } = resolveUploadedAudioMetadata(
+    audioUrl,
+    audioResponse.headers.get("content-type")
+  );
+  const filePath = `${trackId}.${extension}`;
   const { error: uploadError } = await supabase.storage
     .from("tracks")
-    .upload(filePath, audioBuffer, {
-      contentType: "audio/wav",
+    .upload(filePath, Buffer.from(audioBuffer), {
+      contentType,
       upsert: true
     });
 
   if (uploadError) {
-    const failedResult = await markTrackFailed(trackId);
-    return failedResult.ok
-      ? { ok: false, status: 500, error: "Could not upload generated audio." }
-      : failedResult;
+    console.error("Supabase storage upload failed", {
+      trackId,
+      filePath,
+      contentType,
+      uploadError
+    });
+    console.warn("Falling back to source audio URL because Supabase storage upload is unavailable", {
+      trackId,
+      audioUrl
+    });
+    return markTrackSucceeded(trackId, payload.id, audioUrl);
   }
 
   const {
     data: { publicUrl }
   } = supabase.storage.from("tracks").getPublicUrl(filePath);
 
-  const { error: updateError } = await supabase
-    .from("tracks")
-    .update({
-      status: "succeeded",
-      audio_url: publicUrl,
-      replicate_job_id: payload.id,
-      duration_seconds: GENERATION_DURATION_SECONDS
-    })
-    .eq("id", trackId);
-
-  if (updateError) {
-    return { ok: false, status: 500, error: "Could not save completed track." };
-  }
-
-  revalidatePath("/", "layout");
-
-  return { ok: true };
+  return markTrackSucceeded(trackId, payload.id, publicUrl);
 }
 
 export function isLocalSiteUrl(value: string) {
