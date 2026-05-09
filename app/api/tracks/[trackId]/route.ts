@@ -1,6 +1,27 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+
+function getStorageObjectPath(audioUrl: string | null) {
+  if (!audioUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(audioUrl);
+    const marker = "/object/public/tracks/";
+    const markerIndex = url.pathname.indexOf(marker);
+
+    if (markerIndex === -1) {
+      return null;
+    }
+
+    return decodeURIComponent(url.pathname.slice(markerIndex + marker.length));
+  } catch {
+    return null;
+  }
+}
 
 export async function DELETE(
   _request: Request,
@@ -32,15 +53,31 @@ export async function DELETE(
 
   const admin = createAdminClient();
 
-  if (track.audio_url) {
-    await admin.storage.from("tracks").remove([`${track.id}.wav`]);
+  const storageObjectPath = getStorageObjectPath(track.audio_url);
+
+  if (storageObjectPath) {
+    await admin.storage.from("tracks").remove([storageObjectPath]);
   }
 
-  const { error: deleteError } = await supabase.from("tracks").delete().eq("id", track.id);
+  const { data: deletedTrack, error: deleteError } = await admin
+    .from("tracks")
+    .delete()
+    .eq("id", track.id)
+    .select("id")
+    .maybeSingle<{ id: string }>();
 
   if (deleteError) {
     return NextResponse.json({ error: deleteError.message }, { status: 500 });
   }
+
+  if (!deletedTrack) {
+    return NextResponse.json({ error: "Track could not be deleted." }, { status: 500 });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/", "layout");
+  revalidatePath("/library");
+  revalidatePath("/create");
 
   return NextResponse.json({ ok: true });
 }

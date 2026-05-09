@@ -41,7 +41,7 @@ export function TrackCard({
   const [editedPrompt, setEditedPrompt] = useState(track.prompt);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const { currentTrack, isPlaying, playTrack, pauseTrack, clearQueue } = usePlayerStore();
+  const { currentTrack, isPlaying, playTrack, pauseTrack, removeTrack } = usePlayerStore();
   const active = currentTrack?.id === track.id;
   const playable = Boolean(track.audio_url && track.status === "succeeded");
   const canDelete = currentUserId === track.user_id;
@@ -71,9 +71,7 @@ export function TrackCard({
       return;
     }
 
-    if (active) {
-      clearQueue();
-    }
+    removeTrack(track.id);
 
     onTrackDeleted?.(track.id);
   }

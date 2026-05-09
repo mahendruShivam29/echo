@@ -422,6 +422,7 @@ function CarouselCard({
   }
 
   const styles = getCardStyles(relative);
+  const isFocused = relative === 0;
   return (
     <motion.button
       type="button"
@@ -459,30 +460,37 @@ function CarouselCard({
         }
       />
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.24),transparent_34%)] mix-blend-screen" />
-      <div className="absolute inset-x-6 top-6 flex items-center justify-between">
-        <span className="rounded-full border border-white/15 bg-zinc-950/45 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white/85 backdrop-blur-md">
-          Project Echo
-        </span>
-        <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur-md">
-          Live Preview
-        </span>
-      </div>
-      <div className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.65),transparent_45%)]" />
-      <div className="absolute inset-x-6 bottom-24 flex items-end gap-1 opacity-80">
-        {[18, 28, 14, 34, 20, 26, 12, 30, 16, 24, 10, 22, 15, 32, 18, 27].map((height, index) => (
-          <span
-            key={`${trackId}-${index}`}
-            className="w-full rounded-full bg-white/35"
-            style={{ height }}
-          />
-        ))}
-      </div>
-      <div className="absolute inset-x-0 bottom-0 p-6 text-left">
-        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-emerald-200/90">
-          {getTrackTitle({ id: trackId, prompt } as Track)}
-        </p>
-        <p className="line-clamp-3 text-sm font-semibold text-white/90">{prompt}</p>
-      </div>
+      <div
+        className="absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.65),transparent_45%)]"
+        style={{ opacity: isFocused ? 1 : 0.25 }}
+      />
+      {isFocused ? (
+        <>
+          <div className="absolute inset-x-6 top-6 flex items-center justify-between">
+            <span className="rounded-full border border-white/15 bg-zinc-950/45 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white/85 backdrop-blur-md">
+              Project Echo
+            </span>
+            <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-200 backdrop-blur-md">
+              Live Preview
+            </span>
+          </div>
+          <div className="absolute inset-x-6 bottom-24 flex items-end gap-1 opacity-80">
+            {[18, 28, 14, 34, 20, 26, 12, 30, 16, 24, 10, 22, 15, 32, 18, 27].map((height, index) => (
+              <span
+                key={`${trackId}-${index}`}
+                className="w-full rounded-full bg-white/35"
+                style={{ height }}
+              />
+            ))}
+          </div>
+          <div className="absolute inset-x-0 bottom-0 p-6 text-left">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-emerald-200/90">
+              {getTrackTitle({ id: trackId, prompt } as Track)}
+            </p>
+            <p className="line-clamp-3 text-sm font-semibold text-white/90">{prompt}</p>
+          </div>
+        </>
+      ) : null}
     </motion.button>
   );
 }

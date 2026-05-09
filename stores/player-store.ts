@@ -18,6 +18,7 @@ interface PlayerState {
   setVolume: (volume: number) => void;
   setIsBuffering: (value: boolean) => void;
   setQueue: (queue: Track[], startIndex?: number) => void;
+  removeTrack: (trackId: string) => void;
   clearQueue: () => void;
 }
 
@@ -99,6 +100,44 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       queue: playableQueue,
       currentIndex: safeIndex,
       currentTrack: safeIndex >= 0 ? playableQueue[safeIndex] : null
+    });
+  },
+  removeTrack: (trackId) => {
+    const { queue, currentTrack, currentIndex } = get();
+    const nextQueue = getPlayableTracks(queue).filter((track) => track.id !== trackId);
+
+    if (!nextQueue.length) {
+      set({
+        currentTrack: null,
+        queue: [],
+        currentIndex: -1,
+        isPlaying: false,
+        isBuffering: false
+      });
+      return;
+    }
+
+    if (currentTrack?.id === trackId) {
+      const nextIndex = Math.min(Math.max(0, currentIndex), nextQueue.length - 1);
+      set({
+        queue: nextQueue,
+        currentIndex: nextIndex,
+        currentTrack: nextQueue[nextIndex],
+        isPlaying: false,
+        isBuffering: false
+      });
+      return;
+    }
+
+    const nextIndex = Math.max(
+      0,
+      nextQueue.findIndex((track) => track.id === currentTrack?.id)
+    );
+
+    set({
+      queue: nextQueue,
+      currentIndex: nextIndex,
+      currentTrack: nextQueue[nextIndex] ?? null
     });
   },
   clearQueue: () =>
