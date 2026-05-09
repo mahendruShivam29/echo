@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
     prompt TEXT NOT NULL,
-    generation_model TEXT DEFAULT 'ace-step-base' CHECK (generation_model IN ('ace-step-base', 'musicgen')),
+    generation_model TEXT DEFAULT 'ace-step-base' CHECK (generation_model IN ('ace-step-base', 'musicgen', 'ace-step-finetuned', 'diffusion-finetuned')),
     cover_image_url TEXT,
     cover_image_alt TEXT,
     cover_photographer_name TEXT,
@@ -47,7 +47,7 @@ DROP CONSTRAINT IF EXISTS tracks_generation_model_check;
 
 ALTER TABLE tracks
 ADD CONSTRAINT tracks_generation_model_check
-CHECK (generation_model IN ('ace-step-base', 'musicgen'));
+CHECK (generation_model IN ('ace-step-base', 'musicgen', 'ace-step-finetuned', 'diffusion-finetuned'));
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tracks ENABLE ROW LEVEL SECURITY;

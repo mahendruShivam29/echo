@@ -19,7 +19,12 @@ type GenerateResponse = {
   error?: string;
 };
 
-const modelOptions: GenerationModel[] = ["ace-step-base", "musicgen"];
+const modelOptions: GenerationModel[] = [
+  "ace-step-base",
+  "musicgen",
+  "ace-step-finetuned",
+  "diffusion-finetuned"
+];
 
 const promptSeeds = [
   "Cinematic synthwave with analog bass, glassy arpeggios, and a wide neon chorus.",
@@ -194,7 +199,11 @@ export function CreateForm({ initialTracks, userId }: { initialTracks: Track[]; 
                 <p className="mt-1 text-xs text-zinc-400">
                   {modelOption === "ace-step-base"
                     ? "Lyrics-capable ACE-Step base model via Replicate."
-                    : "Meta MusicGen for text-to-music generation."}
+                    : modelOption === "musicgen"
+                      ? "Meta MusicGen for text-to-music generation."
+                      : modelOption === "ace-step-finetuned"
+                        ? "Your Hugging Face hosted transformer LoRA fine-tuned ACE-Step model."
+                        : "Your Hugging Face hosted diffusion fine-tuned ACE-Step model."}
                 </p>
               </button>
             );

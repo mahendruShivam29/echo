@@ -16,3 +16,7 @@ export function requireEnv(name: (typeof requiredServerEnv)[number]) {
 
   return value;
 }
+
+export function getEnv(name: string) {
+  return process.env[name];
+}

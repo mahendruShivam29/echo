@@ -125,6 +125,89 @@ async function markTrackSucceeded(
   return { ok: true };
 }
 
+async function persistCompletedAudio(
+  trackId: string,
+  payloadId: string,
+  audioUrl: string
+): Promise<CompletionResult> {
+  const supabase = createAdminClient();
+  const audioResponse = await fetch(audioUrl);
+
+  if (!audioResponse.ok) {
+    const failedResult = await markTrackFailed(trackId);
+    return failedResult.ok
+      ? { ok: false, status: 502, error: "Could not download generated audio." }
+      : failedResult;
+  }
+
+  const audioBuffer = await audioResponse.arrayBuffer();
+  const { extension, contentType } = resolveUploadedAudioMetadata(
+    audioUrl,
+    audioResponse.headers.get("content-type")
+  );
+  const filePath = `${trackId}.${extension}`;
+  const { error: uploadError } = await supabase.storage
+    .from("tracks")
+    .upload(filePath, Buffer.from(audioBuffer), {
+      contentType,
+      upsert: true
+    });
+
+  if (uploadError) {
+    console.error("Supabase storage upload failed", {
+      trackId,
+      filePath,
+      contentType,
+      uploadError
+    });
+    console.warn("Falling back to source audio URL because Supabase storage upload is unavailable", {
+      trackId,
+      audioUrl
+    });
+    return markTrackSucceeded(trackId, payloadId, audioUrl);
+  }
+
+  const {
+    data: { publicUrl }
+  } = supabase.storage.from("tracks").getPublicUrl(filePath);
+
+  return markTrackSucceeded(trackId, payloadId, publicUrl);
+}
+
+export async function completeTrackFromSourceUrl(
+  trackId: string,
+  audioUrl: string,
+  payloadId: string
+): Promise<CompletionResult> {
+  const supabase = createAdminClient();
+  const { data: track, error: trackError } = await supabase
+    .from("tracks")
+    .select("id,status,replicate_job_id")
+    .eq("id", trackId)
+    .single<TrackCompletionState>();
+
+  if (trackError || !track) {
+    return { ok: false, status: 404, error: "Unknown track." };
+  }
+
+  if (track.status !== "processing") {
+    return { ok: true, ignored: "Track already completed." };
+  }
+
+  if (!payloadId || track.replicate_job_id !== payloadId) {
+    return { ok: false, status: 403, error: "Prediction does not match track." };
+  }
+
+  if (!audioUrl || !isHttpUrl(audioUrl)) {
+    const failedResult = await markTrackFailed(trackId);
+    return failedResult.ok
+      ? { ok: false, status: 422, error: "Generation completed without audio." }
+      : failedResult;
+  }
+
+  return persistCompletedAudio(trackId, payloadId, audioUrl);
+}
+
 export async function completeTrackFromPrediction(
   trackId: string,
   payload: TrackCompletionPayload
@@ -165,47 +248,7 @@ export async function completeTrackFromPrediction(
       : failedResult;
   }
 
-  const audioResponse = await fetch(audioUrl);
-
-  if (!audioResponse.ok) {
-    const failedResult = await markTrackFailed(trackId);
-    return failedResult.ok
-      ? { ok: false, status: 502, error: "Could not download generated audio." }
-      : failedResult;
-  }
-
-  const audioBuffer = await audioResponse.arrayBuffer();
-  const { extension, contentType } = resolveUploadedAudioMetadata(
-    audioUrl,
-    audioResponse.headers.get("content-type")
-  );
-  const filePath = `${trackId}.${extension}`;
-  const { error: uploadError } = await supabase.storage
-    .from("tracks")
-    .upload(filePath, Buffer.from(audioBuffer), {
-      contentType,
-      upsert: true
-    });
-
-  if (uploadError) {
-    console.error("Supabase storage upload failed", {
-      trackId,
-      filePath,
-      contentType,
-      uploadError
-    });
-    console.warn("Falling back to source audio URL because Supabase storage upload is unavailable", {
-      trackId,
-      audioUrl
-    });
-    return markTrackSucceeded(trackId, payload.id, audioUrl);
-  }
-
-  const {
-    data: { publicUrl }
-  } = supabase.storage.from("tracks").getPublicUrl(filePath);
-
-  return markTrackSucceeded(trackId, payload.id, publicUrl);
+  return persistCompletedAudio(trackId, payload.id, audioUrl);
 }
 
 export function isLocalSiteUrl(value: string) {

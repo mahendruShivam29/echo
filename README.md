@@ -1,6 +1,6 @@
 # Project Echo
 
-Premium AI music generation app built with Next.js 14, Supabase, Replicate ACE-Step 1.5 + MusicGen, Unsplash-backed cover art, Zustand, Framer Motion, and Wavesurfer.
+Premium AI music generation app built with Next.js 14, Supabase, Replicate ACE-Step 1.5 + MusicGen, Hugging Face hosted ACE-Step fine-tuned variants, Unsplash-backed cover art, Zustand, Framer Motion, and Wavesurfer.
 
 ## Setup
 
@@ -15,6 +15,8 @@ npm install
 During local webhook testing, `NEXT_PUBLIC_SITE_URL` must be a public tunnel URL from ngrok or localtunnel so Replicate can reach `/api/webhook`.
 
 Set `UNSPLASH_ACCESS_KEY` to enable prompt-matched cover photos. The integration uses server-side Unsplash search, hotlinked images, and UI attribution.
+
+Set `HF_FINE_TUNED_SPACE_ID` to your Gradio/Hugging Face Space id for the fine-tuned ACE-Step models. If the Space is private, also set `HF_TOKEN`.
 
 3. Run `database/schema.sql` in the Supabase SQL editor.
 
@@ -36,4 +38,4 @@ npm run lint
 npm run build
 ```
 
-The production build was verified with placeholder environment values. Real generation requires valid Supabase and Replicate credentials. Unsplash integration requires a valid access key.
+The production build was verified with placeholder environment values. Real generation requires valid Supabase and Replicate credentials. Unsplash integration requires a valid access key. The Hugging Face fine-tuned options require a reachable Space and `@gradio/client` installed.

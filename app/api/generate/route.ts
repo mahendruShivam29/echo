@@ -55,6 +55,10 @@ function getMissingInsertColumn(error: PostgrestLikeError | null | undefined): T
 }
 
 function buildPredictionInput(model: GenerationModel, prompt: string) {
+  if (model === "ace-step-finetuned" || model === "diffusion-finetuned") {
+    return null;
+  }
+
   if (model === "musicgen") {
     return {
       version: MUSICGEN_VERSION,
@@ -169,21 +173,35 @@ export async function POST(request: Request) {
   });
 
   try {
-    const predictionConfig = buildPredictionInput(selectedModel, normalizedPrompt);
-    const prediction = await replicate.predictions.create({
-      version: predictionConfig.version,
-      input: predictionConfig.input,
-      ...(isLocalCompletion
-        ? {}
-        : {
-            webhook: `${siteUrl}/api/webhook?trackId=${track.id}`,
-            webhook_events_filter: ["completed"]
-          })
-    });
+    let predictionId: string;
+    const usesHfSpace =
+      selectedModel === "ace-step-finetuned" || selectedModel === "diffusion-finetuned";
+
+    if (usesHfSpace) {
+      predictionId = `hfspace:${crypto.randomUUID()}`;
+    } else {
+      const predictionConfig = buildPredictionInput(selectedModel, normalizedPrompt);
+      if (!predictionConfig) {
+        throw new Error("Could not build model prediction config.");
+      }
+
+      const prediction = await replicate.predictions.create({
+        version: predictionConfig.version,
+        input: predictionConfig.input,
+        ...(isLocalCompletion
+          ? {}
+          : {
+              webhook: `${siteUrl}/api/webhook?trackId=${track.id}`,
+              webhook_events_filter: ["completed"]
+            })
+      });
+
+      predictionId = prediction.id;
+    }
 
     const { error: updateError } = await supabase
       .from("tracks")
-      .update({ replicate_job_id: prediction.id })
+      .update({ replicate_job_id: predictionId })
       .eq("id", track.id);
 
     if (updateError) {
@@ -193,11 +211,24 @@ export async function POST(request: Request) {
       );
     }
 
-    if (isLocalCompletion) {
+    if (usesHfSpace) {
+      void fetch(`${siteUrl}/api/hf-complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trackId: track.id,
+          prompt: normalizedPrompt,
+          jobId: predictionId,
+          model: selectedModel
+        })
+      }).catch((fineTunedCompletionError) => {
+        console.error("Fine-tuned completion worker failed to start", fineTunedCompletionError);
+      });
+    } else if (isLocalCompletion) {
       void fetch(`${siteUrl}/api/dev-complete`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ trackId: track.id, predictionId: prediction.id })
+        body: JSON.stringify({ trackId: track.id, predictionId })
       }).catch((devCompletionError) => {
         console.error("Local completion worker failed to start", devCompletionError);
       });
@@ -207,7 +238,12 @@ export async function POST(request: Request) {
       trackId: track.id,
       model: selectedModel,
       cover,
-      completion: isLocalCompletion ? "local-dev-worker" : "webhook"
+      completion:
+        usesHfSpace
+          ? "hf-space-worker"
+          : isLocalCompletion
+            ? "local-dev-worker"
+            : "webhook"
     });
   } catch (error) {
     await supabase.from("tracks").update({ status: "failed" }).eq("id", track.id);
